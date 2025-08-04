@@ -198,14 +198,15 @@ const char* getTimestamp()
   return buff;
 }
 
-#define CALIBRATION_FACTOR  4.5
+#define CALIBRATION_FACTOR  27.776
 #define PERIOD              1000
 
-static const int sensorPin = 14;
+static const int flowSensorPin = 14; // D5 on NodeMCU.
 static volatile int pulseCount;  
 static float flowRate;
 static unsigned int flowMilliLitres;
 static unsigned int totalMilliLitres;
+static const int motorPin = 12; // D6 on NodeMCU.
 
 IRAM_ATTR void pulseCounter()
 {
@@ -219,6 +220,8 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(motorPin, OUTPUT);
+  pinMode(flowSensorPin, INPUT_PULLUP);
 
   setupWiFi();
   setupTime();
@@ -235,7 +238,7 @@ void setup()
   flowRate          = 0.0;
   flowMilliLitres   = 0;
   totalMilliLitres  = 0;
-  attachInterrupt(digitalPinToInterrupt(sensorPin), pulseCounter, FALLING);
+  attachInterrupt(digitalPinToInterrupt(flowSensorPin), pulseCounter, FALLING);
 
   last_millis = millis();
 }
@@ -293,6 +296,7 @@ void loop()
         client.publish(topicResponse, encodeResponse(&response));
         pulseCount = 0;
         dispensing = true;
+        digitalWrite(motorPin, HIGH);
         // Start dispense sequence.
         break;
 
@@ -310,7 +314,7 @@ void loop()
   {
     last_millis = (micros()/1000);
 
-    flowRate = pulseCount / CALIBRATION_FACTOR;
+    flowRate = pulseCount / (float)CALIBRATION_FACTOR;
     flowMilliLitres = (flowRate / 60) * 1000;
     totalMilliLitres += flowMilliLitres;
     Serial.printf("Dispensed: %d\n", totalMilliLitres);
@@ -323,6 +327,7 @@ void loop()
     client.publish(topicResponse, buff);
 
     if (totalMilliLitres >= qty) {
+      digitalWrite(motorPin, LOW);
       dispensing = false;
       totalMilliLitres = 0;
     }
