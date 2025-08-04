@@ -40,7 +40,7 @@ static command_t command;
 
 typedef enum {
   CMD_ACK,
-  CMD_NACK
+  CMD_NACK,
 } response_type_t;
 
 typedef struct {
@@ -198,6 +198,23 @@ const char* getTimestamp()
   return buff;
 }
 
+#define CALIBRATION_FACTOR  4.5
+#define PERIOD              1000
+
+static const int sensorPin = 14;
+static volatile int pulseCount;  
+static float flowRate;
+static unsigned int flowMilliLitres;
+static unsigned int totalMilliLitres;
+
+IRAM_ATTR void pulseCounter()
+{
+  // Increment the pulse counter. Needs lock.
+  pulseCount++;
+}
+
+static int last_millis;
+
 void setup()
 {
   Serial.begin(115200);
@@ -213,6 +230,14 @@ void setup()
 
   client.setServer(mqttBrokerDomain, 1883);
   client.setCallback(callback);
+  
+  pulseCount        = 0;
+  flowRate          = 0.0;
+  flowMilliLitres   = 0;
+  totalMilliLitres  = 0;
+  attachInterrupt(digitalPinToInterrupt(sensorPin), pulseCounter, FALLING);
+
+  last_millis = millis();
 }
 
 static const char *encodeResponse(const response_t* response)
@@ -240,6 +265,12 @@ const char *getStatusReport(void)
   return buff;
 }
 
+static volatile bool dispensing = false;
+
+static JsonDocument progressReport;
+static char buff[128];
+static int qty;
+
 void loop()
 {
   if (!client.connected()) {
@@ -257,8 +288,11 @@ void loop()
     switch(command.type)
     {
       case CMD_DISPENSE:
-        Serial.printf("[Order #%s] Dispense: %d mL of liquid.\n", command.args.dispense.id, command.args.dispense.amt);   
+        Serial.printf("[Order #%s] Dispense: %d mL of liquid.\n", command.args.dispense.id, command.args.dispense.amt); 
+        qty = command.args.dispense.amt;
         client.publish(topicResponse, encodeResponse(&response));
+        pulseCount = 0;
+        dispensing = true;
         // Start dispense sequence.
         break;
 
@@ -269,5 +303,29 @@ void loop()
         break;
     }
     mqtt_rcvd = false;
+  }
+
+#define REAL_TIME_MONITORING_INTERVAL 1000
+  if (dispensing && (millis() - last_millis > REAL_TIME_MONITORING_INTERVAL))
+  {
+    last_millis = (micros()/1000);
+
+    flowRate = pulseCount / CALIBRATION_FACTOR;
+    flowMilliLitres = (flowRate / 60) * 1000;
+    totalMilliLitres += flowMilliLitres;
+    Serial.printf("Dispensed: %d\n", totalMilliLitres);
+
+    progressReport.clear();
+    progressReport["rsp"] = "in progress";
+    progressReport["mL"] =  totalMilliLitres;
+    progressReport.shrinkToFit();
+    serializeJson(progressReport, buff);
+    client.publish(topicResponse, buff);
+
+    if (totalMilliLitres >= qty) {
+      dispensing = false;
+      totalMilliLitres = 0;
+    }
+    pulseCount = 0;
   }
 }
