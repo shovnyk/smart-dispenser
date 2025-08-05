@@ -198,15 +198,15 @@ const char* getTimestamp()
   return buff;
 }
 
-#define CALIBRATION_FACTOR  27.776
+#define CALIBRATION_FACTOR  10// 27.776
 #define PERIOD              1000
 
-static const int flowSensorPin = 14; // D5 on NodeMCU.
+static const int flowSensorPin = 12; // D5 on NodeMCU.
 static volatile int pulseCount;  
 static float flowRate;
 static unsigned int flowMilliLitres;
 static unsigned int totalMilliLitres;
-static const int motorPin = 12; // D6 on NodeMCU.
+static const int motorPin = 14; // D6 on NodeMCU.
 
 IRAM_ATTR void pulseCounter()
 {
@@ -273,6 +273,7 @@ static volatile bool dispensing = false;
 static JsonDocument progressReport;
 static char buff[128];
 static int qty;
+static int when_to_stop;
 
 void loop()
 {
@@ -287,6 +288,8 @@ void loop()
     last_status_report = millis();
   }
 
+#define MAGIC 38.4615 // ms/mL
+
   if (mqtt_rcvd) { // TODO: Race conditions? Best to use a queue!
     switch(command.type)
     {
@@ -297,6 +300,9 @@ void loop()
         pulseCount = 0;
         dispensing = true;
         digitalWrite(motorPin, HIGH);
+        when_to_stop = MAGIC * command.args.dispense.amt;
+        Serial.printf("Dispenser for %d ms.\n", when_to_stop);
+        last_millis = millis();
         // Start dispense sequence.
         break;
 
@@ -309,28 +315,36 @@ void loop()
     mqtt_rcvd = false;
   }
 
-#define REAL_TIME_MONITORING_INTERVAL 1000
-  if (dispensing && (millis() - last_millis > REAL_TIME_MONITORING_INTERVAL))
-  {
-    last_millis = (micros()/1000);
-
-    flowRate = pulseCount / (float)CALIBRATION_FACTOR;
-    flowMilliLitres = (flowRate / 60) * 1000;
-    totalMilliLitres += flowMilliLitres;
-    Serial.printf("Dispensed: %d\n", totalMilliLitres);
-
-    progressReport.clear();
-    progressReport["rsp"] = "in progress";
-    progressReport["mL"] =  totalMilliLitres;
-    progressReport.shrinkToFit();
-    serializeJson(progressReport, buff);
-    client.publish(topicResponse, buff);
-
-    if (totalMilliLitres >= qty) {
-      digitalWrite(motorPin, LOW);
-      dispensing = false;
-      totalMilliLitres = 0;
-    }
-    pulseCount = 0;
+  if (dispensing && (millis() - last_millis > when_to_stop)) {
+    digitalWrite(motorPin, LOW);
+    dispensing = false;
+    last_millis = millis();
+    Serial.println("Done");
   }
+
+// #define REAL_TIME_MONITORING_INTERVAL 1000
+//   if (dispensing && (millis() - last_millis > REAL_TIME_MONITORING_INTERVAL))
+//   {
+//     last_millis = (micros()/1000);
+
+//     flowRate = pulseCount / (float)CALIBRATION_FACTOR;
+//     flowMilliLitres = (flowRate / 60) * 1000;
+//     totalMilliLitres += flowMilliLitres;
+//     Serial.printf("Dispensed: %d\n", totalMilliLitres);
+
+//     progressReport.clear();
+//     progressReport["rsp"] = "in progress";
+//     progressReport["mL"] =  totalMilliLitres;
+//     progressReport.shrinkToFit();
+//     serializeJson(progressReport, buff);
+//     client.publish(topicResponse, buff);
+
+//     if (totalMilliLitres >= qty) {
+//       digitalWrite(motorPin, LOW);
+//       dispensing = false;
+//       totalMilliLitres = 0;
+//       pulseCount = 0;
+//     }
+//     pulseCount = 0;
+//   }
 }
