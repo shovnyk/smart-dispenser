@@ -11,12 +11,27 @@
 // Adafruit_ST7735(int8_t cs, int8_t dc, int8_t mosi, int8_t sclk, int8_t rst);
 static Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 
+static TimerHandle_t TFTTimer;
+static int TFTTimeoutMs = 5000;
+
+void TFTTimerCallback(TimerHandle_t)
+{
+  tft.fillScreen(ST77XX_BLACK);
+}
+
 void tftsetup()
 {
   tft.initR(INITR_BLACKTAB);      // Init ST7735S chip, black tab.
   tft.fillScreen(ST77XX_BLACK);
   // Switch to landscape mode.
   tft.setRotation(1);
+  TFTTimer = xTimerCreate(
+    "TFTTimer",
+    pdMS_TO_TICKS(TFTTimeoutMs),
+    pdFALSE,
+    NULL,
+    TFTTimerCallback
+  );
 }
 
 void tftOrderReceived(const char *orderId)
@@ -42,6 +57,7 @@ void tftOrderCancelled()
   tft.setTextSize(2, 2);
   tft.println("Order");
   tft.println("Cancelled!");
+  xTimerStart(TFTTimer, 0);
 }
 
 void tftSystemCheck()
@@ -74,4 +90,5 @@ void tftDispenseComplete()
   tft.println("Finished");
   tft.println("dispensing.");
   tft.println();
+  xTimerStart(TFTTimer, 0);
 }
