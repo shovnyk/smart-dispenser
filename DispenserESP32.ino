@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 
 #include "TTFT.hpp"
+#include "NTC.hpp"
 
 // WiFi Credentials.
 #include "secrets.h"
@@ -264,6 +265,10 @@ void setup()
   client.setCallback(callback);
   
   setupTime();
+  Serial.printf("NTC temperature: %.2f\n", ntc.readTemperature());
+
+  // attachInterrupt(floatSwitch, tankPossiblyEmpty, FALLING);
+  // attachInterrupt(irPin, containerPossiblyRemoved, FALLING);
 }
 
 void loop()
