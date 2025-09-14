@@ -14,8 +14,7 @@ static SemaphoreHandle_t button_semaphore;
 static bool window_open = false;
 static long long last_millis;
 
-
-#define BUTTON_TIMEOUT              pdMS_TO_TICKS(30000)
+#define BUTTON_TIMEOUT              pdMS_TO_TICKS(3600000) // 1 hour.
 #define BUTTON_DEBOUNCE_INTERVAL_MS 150
 
 static void IRAM_ATTR buttonAPressed() {
@@ -68,4 +67,12 @@ enum button_type get_user_input(bool block)
   }
   window_open = false;
   return BUTTON_NONE;
+}
+
+void read_buttons(int *btnA, int *btnB)
+{
+  if (btnA != NULL)
+    *btnA = digitalRead(buttonA);
+  if (btnB != NULL)
+    *btnB = digitalRead(buttonB);
 }

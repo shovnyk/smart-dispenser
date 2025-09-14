@@ -49,7 +49,6 @@ void setup()
   wifi_setup();
   mqtt_client_setup(device_id);
 
-
   queue = xQueueCreate(MAIN_QUEUE_MAX_ITEMS, sizeof(int));
 }
 

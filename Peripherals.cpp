@@ -1,4 +1,5 @@
 #include "Peripherals.h"
+#include "Button.h"
 
 // Inputs (sensors).
 static int float_switch = 13;
@@ -33,6 +34,7 @@ void peripherals_init()
 
 int system_check(int attempt_number)
 {
+  int cancel_button = 0;
   if (digitalRead(float_switch) == 0) {
     Serial.println("Tank empty!");
     return 1;
@@ -41,9 +43,15 @@ int system_check(int attempt_number)
     Serial.println("No container!");
     return 2;
   }
+  // As a manual override - allow user to press cancel button to pause dispensing.
+  read_buttons(NULL, &cancel_button);
+  if (cancel_button == 0) {
+    Serial.println("User pressed cancel button!");
+    return 3;
+  }
   // if (attempt_number > 0 && (pulse_count == 0)) {
   //   Serial.println("No flow!");
-  //   return 3;
+  //   return 4;
   // }
   return 0;
 }

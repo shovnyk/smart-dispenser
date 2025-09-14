@@ -8,4 +8,6 @@ enum button_type {
 
 enum button_type get_user_input(bool block);
 
+void read_buttons(int *btnA, int *btnB);
+
 void button_init();
