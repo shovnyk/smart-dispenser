@@ -1,4 +1,5 @@
 #include "Peripherals.h"
+#include "ZScoreFilter.h"
 #include "Button.h"
 
 // Inputs (sensors).
@@ -11,6 +12,7 @@ static int motor = 33;
 static int buzzer = 26;
 
 static uint32_t pulse_count;
+static float calibration_factor = 0.03194F;
 
 static void pulse_counter_isr()
 {
@@ -23,7 +25,7 @@ void peripherals_init()
   pinMode(float_switch, INPUT);
   pinMode(IR_sensor, INPUT);
   pinMode(flow_sensor, INPUT);
-  // attachInterrupt(flow_sensor, pulse_counter_isr, FALLING);
+  attachInterrupt(flow_sensor, pulse_counter_isr, FALLING);
 
   // Outputs.
   pinMode(motor, OUTPUT);
@@ -58,7 +60,6 @@ int system_check(int attempt_number)
 
 void dispense(bool start, int *quantity)
 {
-  (void)quantity;
   // Guard variable for idempotence.
   static bool dispensing = false;
   if (start && !dispensing) {
@@ -70,5 +71,11 @@ void dispense(bool start, int *quantity)
     Serial.println("Stopping dispense");
     digitalWrite(motor, LOW);
     dispensing = false;
+  }
+  else if (dispensing && (quantity != nullptr)) {
+    disableInterrupt(flow_sensor);
+    *quantity = *quantity - (z_score_filter(pulse_count) * calibration_factor);
+    pulse_count = 0;
+    attachInterrupt(flow_sensor, pulse_counter_isr, FALLING);
   }
 }

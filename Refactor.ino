@@ -111,6 +111,7 @@ void loop()
     dispense(true, &qty);
     vTaskDelay(pdMS_TO_TICKS(100));
     if (qty < 0) {
+      dispense(false, nullptr);
       break;
     }
 
