@@ -3,6 +3,8 @@
 #include "MQTTClient.h"
 #include "Button.h"
 #include "Peripherals.h"
+#include "LoadCell.h"
+#include "TimedMovingAverageVector.h"
 #include "secrets.h"
 #include "esp_mac.h"
 
@@ -20,6 +22,7 @@ static void device_setup()
 
   button_init();
   peripherals_init();
+  loadcell_init();
 }
 
 static void wifi_setup()
@@ -79,7 +82,9 @@ void loop()
     return;
   }
 
-  // TODO: tare the scale here.
+  int qty_copy = qty;
+  loadcell_tare();
+  tmav_init();
 
   // II. System Check and Dispense.  
   while (true)
@@ -98,6 +103,7 @@ void loop()
         mqtt_client_pub(false, rsp);
         return;
       }
+      tmav_init();
       continue;
     }
 
@@ -106,6 +112,12 @@ void loop()
     vTaskDelay(pdMS_TO_TICKS(100));
     if (qty < 0) {
       break;
+    }
+
+    float weight_grams;
+    if (tmav_insert(loadcell_get_weight(), &weight_grams)) {
+      Serial.printf("%.1f grams\n", weight_grams);
+      mqtt_client_pub(qty_copy - qty); // Amount dispensed.
     }
   }
 
