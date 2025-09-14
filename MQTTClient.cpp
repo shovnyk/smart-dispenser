@@ -4,6 +4,7 @@
 
 #include "MQTTClient.h"
 #include "timestamp.h"
+#include "main.h"
 
 #define MQTT_TASK_STACKSIZE         2048
 #define MQTT_TASK_PRORIRITY         1
@@ -76,7 +77,7 @@ static void heartbeat_callback(TimerHandle_t)
 
 static bool mqtt_reconnect()
 {
-  Serial.print("Attempting MQTT connection...");
+  Serial.print("\nAttempting MQTT connection...");
   if (client.connect(mqtt_client_id)) {
     Serial.println("connected");
     
@@ -166,6 +167,7 @@ static void loop(void *pvParameter)
           continue;
         }
         Serial.printf("Order[%s]: %d mL\n", cmd.order_id, cmd.qty_mL);
+        main_submit(cmd.qty_mL);
         break;
 
       case RESPONSE:
