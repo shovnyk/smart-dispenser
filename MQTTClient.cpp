@@ -3,10 +3,12 @@
 #include <ArduinoJson.h>
 
 #include "MQTTClient.h"
+#include "Peripherals.h"
+#include "LoadCell.h"
 #include "timestamp.h"
 #include "main.h"
 
-#define MQTT_TASK_STACKSIZE         2048
+#define MQTT_TASK_STACKSIZE         3072
 #define MQTT_TASK_PRORIRITY         1
 #define MQTT_QUEUE_MAX_ITEMS        10
 #define MQTT_HEARTBEAT_INTERVAL_MS  5000
@@ -137,6 +139,18 @@ static int decode_command(struct dispenser_command* cmd, const byte* pld, uint16
   strncpy(cmd->order_id, order_id, sizeof(cmd->order_id));
   // Ignore density for now.
   mqtt_client_pub(true, "Command received.");
+
+  // Optional: to allow calibration dynamically from the app.
+  if (doc["cal"]["flow"].is<float>()) {
+    float flow_calibration_constant = doc["cal"]["flow"];
+    flow_sensor_calibrate(flow_calibration_constant);
+  }
+
+  if (doc["cal"]["load"].is<float>()) {
+    float loadcell_calibration_constant = doc["cal"]["load"];
+    load_cell_calibrate(loadcell_calibration_constant);
+  }
+
   return 0;
 }
 

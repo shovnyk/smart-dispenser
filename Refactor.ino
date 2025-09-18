@@ -5,6 +5,7 @@
 #include "Peripherals.h"
 #include "LoadCell.h"
 #include "TimedMovingAverageVector.h"
+#include "LinearInterpolation.h"
 #include "secrets.h"
 #include "esp_mac.h"
 
@@ -83,6 +84,13 @@ void loop()
   }
 
   int qty_copy = qty;
+
+  struct data_point dp;
+  dp.volume_mL = qty;
+  interpolate_linear(&dp);
+  flow_sensor_calibrate(dp.dispense_factor);
+  Serial.printf("Using calibration factor = %f\n", dp.dispense_factor);
+  
   loadcell_tare();
   tmav_init();
 
@@ -115,11 +123,11 @@ void loop()
       break;
     }
 
-    float weight_grams;
-    if (tmav_insert(loadcell_get_weight(), &weight_grams)) {
-      Serial.printf("%.1f grams\n", weight_grams);
-      mqtt_client_pub(qty_copy - qty); // Amount dispensed.
-    }
+    // float weight_grams;
+    // if (tmav_insert(loadcell_get_weight(), &weight_grams)) {
+    //   Serial.printf("%.1f grams\n", weight_grams);
+    //   mqtt_client_pub(qty_copy - qty); // Amount dispensed.
+    // }
   }
 
   rsp = "Dispense successful!";

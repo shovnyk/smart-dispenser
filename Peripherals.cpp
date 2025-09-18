@@ -13,6 +13,7 @@ static int buzzer = 26;
 
 static uint32_t pulse_count;
 static float calibration_factor = 0.03194F;
+static float dispense_factor = 0.0008; // mL/ms
 
 static void pulse_counter_isr()
 {
@@ -58,12 +59,15 @@ int system_check(int attempt_number)
   return 0;
 }
 
+static int last_checked_millis = 0;
+
 void dispense(bool start, int *quantity)
 {
   // Guard variable for idempotence.
   static bool dispensing = false;
   if (start && !dispensing) {
     Serial.println("Starting dispense");
+    last_checked_millis = millis();
     digitalWrite(motor, HIGH);
     dispensing = true;
   }
@@ -73,9 +77,20 @@ void dispense(bool start, int *quantity)
     dispensing = false;
   }
   else if (dispensing && (quantity != nullptr)) {
-    disableInterrupt(flow_sensor);
-    *quantity = *quantity - (z_score_filter(pulse_count) * calibration_factor);
-    pulse_count = 0;
-    attachInterrupt(flow_sensor, pulse_counter_isr, FALLING);
+    // disableInterrupt(flow_sensor);
+    // *quantity = *quantity - (z_score_filter(pulse_count) * calibration_factor);
+    // pulse_count = 0;
+    // attachInterrupt(flow_sensor, pulse_counter_isr, FALLING);
+  
+    int ms = millis() - last_checked_millis; // Number of milliseconds elapsed since the last amount dispensed was checked.
+    float amt = ms * dispense_factor;
+    *quantity = *quantity - amt;
+    Serial.println(*quantity);
   }
+}
+
+void flow_sensor_calibrate(float calconst)
+{
+  // calibration_factor = calconst;
+  dispense_factor = calconst;
 }
