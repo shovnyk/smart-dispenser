@@ -43,6 +43,26 @@ void main_submit(int qty) {
   xQueueSend(queue, &qty, 0);
 }
 
+static SemaphoreHandle_t loadcellSem;
+
+static int qty;
+static int qty_copy;
+
+static TaskHandle_t loadcellTaskHandle;
+
+static void loadCellTask(void *pvParameter)
+{
+  while (true)
+  {
+    xSemaphoreTake(loadcellSem, portMAX_DELAY);
+    float weight_grams;
+    if (tmav_insert(loadcell_get_weight(), &weight_grams)) {
+      Serial.printf("%.1f grams\n", weight_grams);
+      mqtt_client_pub(qty_copy - qty);
+    }
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -54,11 +74,11 @@ void setup()
   mqtt_client_setup(device_id);
 
   queue = xQueueCreate(MAIN_QUEUE_MAX_ITEMS, sizeof(int));
+  loadcellSem = xSemaphoreCreateBinary();
 }
 
 void loop()
 {
-  int qty;
   int err;
   const char *rsp;
   int nitr = 0;
@@ -83,8 +103,6 @@ void loop()
     return;
   }
 
-  int qty_copy = qty;
-
   struct data_point dp;
   dp.volume_mL = qty;
   interpolate_linear(&dp);
@@ -93,6 +111,10 @@ void loop()
   
   loadcell_tare();
   tmav_init();
+  qty_copy = qty;
+
+  // Start load cell task.
+  xTaskCreate(loadCellTask, "loadcell", 1024, NULL, 0, &loadcellTaskHandle);
 
   // II. System Check and Dispense.  
   while (true)
@@ -123,13 +145,13 @@ void loop()
       break;
     }
 
-    // float weight_grams;
-    // if (tmav_insert(loadcell_get_weight(), &weight_grams)) {
-    //   Serial.printf("%.1f grams\n", weight_grams);
-    //   mqtt_client_pub(qty_copy - qty); // Amount dispensed.
-    // }
+    // Give binary semaphore to load cell task here.
+    xSemaphoreGive(loadcellSem);
   }
 
   rsp = "Dispense successful!";
   mqtt_client_pub(true, rsp);
+
+  // End load cell task.
+  vTaskDelete(loadcellTaskHandle);
 }
